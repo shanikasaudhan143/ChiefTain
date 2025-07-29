@@ -12,8 +12,8 @@ import {
 } from "react-icons/fa";
 import "./AdminDashboard.css";
 
-// const API_BASE = "http://localhost:8000";  
-const API_BASE = "https://chieftrain.onrender.com"
+const API_BASE = "http://localhost:8000";  
+// const API_BASE = "https://chieftrain.onrender.com"
 export default function AdminDashboard() {
   const [authenticated, setAuthenticated] = useState(false);
   const [password, setPassword] = useState("");
