@@ -24,8 +24,8 @@ function Chatbot() {
   const [isBookingLoading, setIsBookingLoading]   = useState(false);
   const [isCheckingLoading, setIsCheckingLoading] = useState(false);
   const [loading, setLoading] = useState(true);
-  const API_BASE = "http://localhost:8000"; 
-  // const API_BASE = "https://chieftrain.onrender.com"
+  // const API_BASE = "http://localhost:8000"; 
+  const API_BASE = "https://chieftrain.onrender.com"
   const faqList = [
   { question: "What time is check-in?", answer: "Check-in is at 2 PM." },
   { question: "What time is check-out?", answer: "Check-out is at 11 AM." },
