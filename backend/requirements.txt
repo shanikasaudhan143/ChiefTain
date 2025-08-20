@@ -21,6 +21,7 @@ filelock==3.18.0
 filetype==1.2.0
 frozenlist==1.7.0
 fsspec==2025.7.0
+git-filter-repo==2.47.0
 google-ai-generativelanguage==0.6.15
 google-api-core==2.25.1
 google-api-python-client==2.176.0
@@ -71,6 +72,7 @@ numexpr==2.11.0
 numpy==2.3.1
 orjson==3.10.18
 packaging==24.2
+phonenumbers==9.0.12
 postgrest==1.1.1
 propcache==0.3.2
 proto-plus==1.26.1
@@ -87,6 +89,7 @@ python-dateutil==2.9.0.post0
 python-dotenv==1.1.1
 python-http-client==3.3.7
 PyYAML==6.0.2
+razorpay==1.4.2
 realtime==2.5.3
 regex==2024.11.6
 requests==2.32.4
@@ -106,6 +109,7 @@ supabase==2.16.0
 supafunc==0.10.1
 sympy==1.14.0
 tenacity==8.5.0
+torch==2.7.1
 tqdm==4.67.1
 twilio==9.6.5
 typing-inspect==0.9.0
