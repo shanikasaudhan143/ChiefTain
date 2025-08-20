@@ -12,8 +12,8 @@ import {
 } from "react-icons/fa";
 import "./AdminDashboard.css";
 
-// const API_BASE = "http://localhost:8000";  
-const API_BASE = "https://chieftrain.onrender.com"
+const API_BASE = "http://localhost:8000";  
+// const API_BASE = "https://chieftrain.onrender.com"
 export default function AdminDashboard() {
   const [authenticated, setAuthenticated] = useState(false);
   const [password, setPassword] = useState("");
@@ -233,73 +233,111 @@ export default function AdminDashboard() {
         )}
 
         {/* BOOKINGS */}
-        {activeTab === "bookings" && (
-          <>
-            {isBookingsLoading ? (
-              <div className="dashboard__loading">
-                <FaSpinner className="dashboard__loading-icon" /> Loading
-                bookings…
-              </div>
-            ) : (
-              <table className="dashboard__table">
-                <thead>
-                  <tr>
-                    <th>Email</th>
-                    <th>Room</th>
-                    <th>Dates</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bookings.length === 0 && (
-                    <tr>
-                      <td colSpan="5" className="dashboard__empty">
-                        No bookings.
-                      </td>
-                    </tr>
+        {/* BOOKINGS */}
+{activeTab === "bookings" && (
+  <>
+    {isBookingsLoading ? (
+      <div className="dashboard__loading">
+        <FaSpinner className="dashboard__loading-icon" /> Loading bookings…
+      </div>
+    ) : (
+      <table className="dashboard__table">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Room</th>
+            <th>Dates</th>
+            <th>Amount</th>
+            <th>Payment</th>
+            <th>Booking</th>
+            <th>Order ID</th>
+            <th>Payment ID</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {bookings.length === 0 && (
+            <tr>
+              <td colSpan="9" className="dashboard__empty">No bookings.</td>
+            </tr>
+          )}
+
+          {bookings.map((b) => {
+            const amount = ((b.amount_paise || 0) / 100).toFixed(2);
+            const payment = (b.payment_status || "init").toLowerCase();   // init|created|paid|failed|refunded
+            const bookingStatus = (b.status || "pending").toLowerCase();  // pending|confirmed|rejected
+
+            return (
+              <tr key={b.id}>
+                <td data-label="Email">{b.user_id}</td>
+                <td data-label="Room">{b.room_type}</td>
+                <td data-label="Dates">{b.check_in} ↔ {b.check_out}</td>
+                <td data-label="Amount">₹{amount} {b.currency || "INR"}</td>
+
+                <td data-label="Payment">
+                  <span className={`badge ${
+                    payment === "paid" ? "badge--paid"
+                    : payment === "failed" ? "badge--failed"
+                    : payment === "refunded" ? "badge--refunded"
+                    : "badge--pending"
+                  }`}>
+                    {payment.toUpperCase()}
+                  </span>
+                </td>
+
+                <td data-label="Booking">
+                  <span className={`badge ${
+                    bookingStatus === "confirmed" ? "badge--confirmed"
+                    : bookingStatus === "rejected" ? "badge--rejected"
+                    : "badge--pending"
+                  }`}>
+                    {bookingStatus.toUpperCase()}
+                  </span>
+                </td>
+
+                <td data-label="Order ID" style={{wordBreak: "break-all"}}>
+                  {b.payment_order_id || "—"}
+                </td>
+                <td data-label="Payment ID" style={{wordBreak: "break-all"}}>
+                  {b.payment_id || "—"}
+                </td>
+
+                <td data-label="Actions">
+                  {/* keep manual controls for edge cases */}
+                  {b.status === "pending" && (
+                    <>
+                      <button
+                        className="dashboard__btn dashboard__btn--small"
+                        onClick={() => updateBooking(b.id, "confirmed")}
+                        disabled={!!loadingBookings[b.id]}
+                      >
+                        {loadingBookings[b.id] === "confirming" ? "Confirming…" : "Confirm"}
+                      </button>
+                      <button
+                        className="dashboard__btn dashboard__btn--warning dashboard__btn--small"
+                        onClick={() => updateBooking(b.id, "rejected")}
+                        disabled={!!loadingBookings[b.id]}
+                      >
+                        {loadingBookings[b.id] === "rejecting" ? "Rejecting…" : "Reject"}
+                      </button>
+                    </>
                   )}
-                  {bookings.map((b) => (
-                    <tr key={b.id}>
-                      <td data-label="Email">{b.user_id}</td>
-                      <td data-label="Room">{b.room_type}</td>
-                      <td data-label="Dates">
-                        {b.check_in} ↔ {b.check_out}
-                      </td>
-                      <td data-label="Status">{b.status}</td>
-                      <td data-label="Actions">
-                        {b.status === "pending" && (
-                          <>
-                            <button
-                              className="dashboard__btn dashboard__btn--small"
-                              onClick={() => updateBooking(b.id, "confirmed")}
-                              disabled={!!loadingBookings[b.id]}
-                            >
-                              {loadingBookings[b.id] === "confirming" ? "Confirming…" : <><FaCheck/> Confirm</>}
-                            </button>
-                            <button
-                              className="dashboard__btn dashboard__btn--warning dashboard__btn--small"
-                              onClick={() => updateBooking(b.id, "rejected")}
-                              disabled={!!loadingBookings[b.id]}
-                            >
-                              {loadingBookings[b.id] === "rejecting" ? "Rejecting…" : <><FaTimes/> Reject</>}
-                            </button>
-                          </>
-                        )}
-                        <button
-                          className="dashboard__btn dashboard__btn--danger dashboard__btn--small"
-                          onClick={() => deleteBooking(b.id)}
-                        >
-                          <FaTrash /> 
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </>
-        )}
+                  <button
+                    className="dashboard__btn dashboard__btn--danger dashboard__btn--small"
+                    onClick={() => deleteBooking(b.id)}
+                  >
+                    <FaTrash />
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    )}
+  </>
+)}
+
 
         {/* SENTIMENTS */}
         {activeTab === "sentiments" && (

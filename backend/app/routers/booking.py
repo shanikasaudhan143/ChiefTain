@@ -1,7 +1,9 @@
+# Updated `app/routers/booking.py`
+
 import logging
 import re
 from datetime import datetime
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, HTTPException
 from typing import Optional
 
 from app.schemas import BookingRequest
@@ -17,23 +19,44 @@ router = APIRouter(
     tags=["booking"]
 )
 
+# --------------------
+# Helpers
+# --------------------
+
 def parse_date(date_str: str) -> datetime.date:
     return datetime.strptime(date_str, "%Y-%m-%d").date()
 
 def is_valid_email(email: str) -> bool:
     return re.match(r"[^@]+@[^@]+\.[^@]+", email) is not None
 
+def nights(ci: str, co: str) -> int:
+    try:
+        d1 = parse_date(ci)
+        d2 = parse_date(co)
+        return max(1, (d2 - d1).days)
+    except Exception:
+        return 1
+
+# --------------------
+# Routes
+# --------------------
+
 @router.post("/")
 async def create_booking(req: BookingRequest):
+    """Create a booking as PENDING + initialize payment fields.
+    Now returns the inserted booking row (incl. id) so frontend can start payment.
+    """
     logger.info(f"🔹 Received booking request: {req.dict()}")
 
     if not is_valid_email(req.user_id):
         logger.warning("❌ Invalid email format")
-        return {"message": "Invalid email format."}
+        raise HTTPException(status_code=400, detail="Invalid email format.")
 
-    existing = supabase.table("bookings").select("*") \
+    # Capacity check against confirmed bookings of the same room_type
+    existing = (
+        supabase.table("bookings").select("*")
         .eq("room_type", req.room_type).eq("status", "confirmed").execute()
-
+    )
     logger.info(f"🔍 Existing confirmed bookings: {len(existing.data)}")
 
     overlap_count = 0
@@ -45,31 +68,48 @@ async def create_booking(req: BookingRequest):
     room_limit = room_limits.get(req.room_type, 0)
 
     if overlap_count >= room_limit:
-        logger.warning(f"⚠️ Booking conflict: {overlap_count} overlapping bookings found for {req.room_type}")
+        logger.warning(
+            f"⚠️ Booking conflict: {overlap_count} overlapping bookings found for {req.room_type}"
+        )
         availability = check_availability(req.check_in, req.check_out)
         return {
             "message": f"No available {req.room_type} rooms for these dates.",
-            "available_rooms": availability
+            "available_rooms": availability,
         }
 
+    # --------------------
+    # 💰 Pricing (per-night base × nights)
+    # --------------------
+    base = {"Standard": 1500_00, "Deluxe": 2500_00, "Suite": 4000_00}  # paise/night
+    num_nights = nights(req.check_in, req.check_out)
+    amount_paise = base.get(req.room_type, 1500_00) * num_nights
+    currency = "INR"
 
     confirmation = (
         f"Booking request for {req.name}, {req.room_type} room from "
         f"{req.check_in} to {req.check_out}."
     )
 
-    supabase.table("bookings").insert({
+    insert_res = supabase.table("bookings").insert({
         "user_id": req.user_id,
         "name": req.name,
         "room_type": req.room_type,
         "check_in": req.check_in,
         "check_out": req.check_out,
         "confirmation": confirmation,
-        "status": "pending"
+        "status": "pending",
+        # payment fields
+        "amount_paise": amount_paise,
+        "currency": currency,
+        "payment_status": "init",
     }).execute()
 
-    logger.info("✅ Booking request inserted as 'pending'")
-    return {"message": "Booking request submitted! Await confirmation email."}
+    row = (insert_res.data or [None])[0]
+    if not row:
+        raise HTTPException(status_code=500, detail="Failed to create booking")
+
+    logger.info("✅ Booking request inserted as 'pending' with pricing & payment init")
+    return {"message": "Booking request submitted!", "booking": row}
 
 
 @router.get("/")
@@ -101,7 +141,7 @@ async def update_booking_status(booking_id: str, status: str):
         send_booking_email(
             to_email=booking["user_id"],
             subject="Booking Confirmed",
-            content=email_content
+            content=email_content,
         )
     elif status == "rejected":
         logger.info("📧 Sending rejection email")
@@ -113,7 +153,7 @@ async def update_booking_status(booking_id: str, status: str):
         send_booking_email(
             to_email=booking["user_id"],
             subject="Booking Not Available",
-            content=email_content
+            content=email_content,
         )
 
     supabase.table("bookings").update({"status": status}).eq("id", booking_id).execute()
@@ -126,7 +166,7 @@ async def update_booking_status(booking_id: str, status: str):
 def check_availability(
     check_in: str = Query(...),
     check_out: str = Query(...),
-    room_type: Optional[str] = None
+    room_type: Optional[str] = None,
 ):
     logger.info(f"📅 Checking availability from {check_in} to {check_out}")
 

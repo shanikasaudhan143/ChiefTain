@@ -281,3 +281,43 @@
 }
 
  
+/* Status badges for payments & bookings */
+.badge {
+  display: inline-block;
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  line-height: 1;
+}
+
+/* Payment badges */
+.badge--pending {
+  background: #fff7e6;
+  border-color: #ffd591;
+  color: #ad6800;
+}
+.badge--paid,
+.badge--confirmed { /* reuse for booking confirmed too */
+  background: #f6ffed;
+  border-color: #b7eb8f;
+  color: #237804;
+}
+.badge--failed,
+.badge--rejected {
+  background: #fff1f0;
+  border-color: #ffa39e;
+  color: #a8071a;
+}
+.badge--refunded {
+  background: #e6f7ff;
+  border-color: #91d5ff;
+  color: #09539d;
+}
+
+/* Keep mobile card layout readable for the extra columns */
+@media (max-width: 599px) {
+  .dashboard__table td {
+    padding-left: 120px; /* a bit wider for longer labels like Order/Payment ID */
+  }
+}

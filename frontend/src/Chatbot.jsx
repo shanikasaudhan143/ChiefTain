@@ -5,6 +5,17 @@ import {
 } from "react-icons/fa";
 import "./Chatbot.css";
 
+function loadRazorpay() {
+  return new Promise((resolve, reject) => {
+    if (window.Razorpay) return resolve(true);
+    const s = document.createElement("script");
+    s.src = "https://checkout.razorpay.com/v1/checkout.js";
+    s.onload = () => resolve(true);
+    s.onerror = () => reject(new Error("Failed to load Razorpay"));
+    document.body.appendChild(s);
+  });
+}
+
 function Chatbot() {
   const [section, setSection] = useState(null);
   const [chatMessages, setChatMessages] = useState([{ from: "bot", text: "How can I help you today?" }]);
@@ -23,9 +34,10 @@ function Chatbot() {
   const [isRequestLoading, setIsRequestLoading]   = useState(false);
   const [isBookingLoading, setIsBookingLoading]   = useState(false);
   const [isCheckingLoading, setIsCheckingLoading] = useState(false);
+  const [paySummary, setPaySummary] = useState(null);
   const [loading, setLoading] = useState(true);
-  // const API_BASE = "http://localhost:8000"; 
-  const API_BASE = "https://chieftrain.onrender.com"
+  const API_BASE = "http://localhost:8000"; 
+  // const API_BASE = "https://chieftrain.onrender.com"
   const faqList = [
   { question: "What time is check-in?", answer: "Check-in is at 2 PM." },
   { question: "What time is check-out?", answer: "Check-out is at 11 AM." },
@@ -40,6 +52,57 @@ function Chatbot() {
   { question: "Do you have a fitness center?", answer: "Yes, open 24 hours on the 3rd floor—access with your room key." },
   { question: "Can I get an extra bed?", answer: "Yes, roll-away beds are \$25/night—please request at least 12 hours ahead." },
 ];
+
+  
+ // Reset just booking-related UI (form + availability + payment bits)
+const resetBookingUI = () => {
+  setEmail?.("");             // or setForm({ ...defaults }) if you use a single form object
+  setRoomType?.("Deluxe");
+  setCheckIn?.("");
+  setCheckOut?.("");
+  setAvailability?.(null);
+
+  // payment-related
+  setPaySummary?.(null);      // hides the Payment Pending / Paid chip
+  setBookingSuccess?.("");    // clears “Payment successful!” banner
+  setIsBookingLoading?.(false);
+  setIsCheckingLoading?.(false);
+};
+
+// Reset room-service UI if you have a form there too
+const resetRoomServiceUI = () => {
+  setRoomNumber?.("");
+  setGuestPhone?.("");
+  setRoomRequestText?.("");
+  setIsRequestLoading?.(false);
+  setRequestSuccess?.("");
+};
+
+// One entry point you’ll call from back buttons
+const goHome = () => {
+  // clear Booking UI
+  setEmail("");
+  setRoomType("Deluxe");
+  setCheckIn("");
+  setCheckOut("");
+  setAvailability(null);
+  setPaySummary(null);
+  setBookingSuccess("");
+  setIsBookingLoading(false);
+  setIsCheckingLoading(false);
+
+  // clear Room Service UI
+  setRoomNumber("");
+  setPhoneNumber("");
+  setRequestText("");
+  setIsRequestLoading(false);
+  setRequestSuccess(false);
+
+  // go to main menu
+  setSection(null);
+};
+
+
    
   useEffect(() => {
     axios.get(`${API_BASE}/chat/ping`)
@@ -63,7 +126,7 @@ function Chatbot() {
   }
 
   const recognition = "webkitSpeechRecognition" in window ? new window.webkitSpeechRecognition() : null;
-
+  
   const startListening = (setter) => {
     if (!recognition) return alert("Speech Recognition not supported.");
     recognition.lang = "en-US";
@@ -121,31 +184,73 @@ function Chatbot() {
         }
   };
 
-  const handleBookingSubmit = async () => {
-    if (!email || !checkIn || !checkOut) {
-      alert("Please fill all fields.");
-      return;
-    }
-    setIsBookingLoading(true);
-     try {
-    await axios.post(`${API_BASE}/booking/`, {
+  // REPLACE your existing handleBookingSubmit with this version
+const handleBookingSubmit = async () => {
+  if (!email || !checkIn || !checkOut) {
+    alert("Please fill all fields.");
+    return;
+  }
+  setIsBookingLoading(true);
+
+  try {
+    // 1) Create booking on backend (now returns the row incl. id)
+    const bookRes = await axios.post(`${API_BASE}/booking/`, {
       user_id: email,
       name: email,
       room_type: roomType,
       check_in: checkIn,
       check_out: checkOut,
     });
-    setBookingSuccess("Booking request submitted! We will confirm via email.");
-    // clear inputs
-    setEmail("");
-    setRoomType("Deluxe");
-    setCheckIn("");
-    setCheckOut("");
-    setAvailability(null);
+    const booking = bookRes.data?.booking;
+    if (!booking?.id) throw new Error("Booking create failed");
+
+    // 2) Create Razorpay order for this booking
+    const orderRes = await axios.post(`${API_BASE}/booking/${booking.id}/create-order`);
+    const { key_id, order } = orderRes.data;
+
+    // show quick payment summary (optional UI)
+    setPaySummary({
+      amount: order.amount,
+      currency: order.currency,
+      orderId: order.id,
+    });
+
+    // 3) Ensure Razorpay is loaded
+    await loadRazorpay();
+    if (!window.Razorpay) throw new Error("Razorpay SDK not available");
+
+    // 4) Open Razorpay Checkout
+    const rzp = new window.Razorpay({
+      key: key_id,
+      order_id: order.id,
+      name: "The Grand Palace Hotel",
+      description: `Room booking for ${email}`,
+      prefill: { name: email, email },
+      notes: { booking_id: booking.id },
+      handler: async function (resp) {
+        // 5) Verify payment server-side
+        await axios.post(`${API_BASE}/booking/payment/verify`, {
+          razorpay_order_id: resp.razorpay_order_id,
+          razorpay_payment_id: resp.razorpay_payment_id,
+          razorpay_signature: resp.razorpay_signature,
+        });
+        setPaySummary((prev) => (prev ? { ...prev, status: "paid" } : prev));
+        setBookingSuccess("✅ Payment successful! Your booking is confirmed.");
+        // Optionally clear form
+        setEmail(""); setRoomType("Deluxe"); setCheckIn(""); setCheckOut("");
+        setAvailability(null);
+      }
+    });
+
+    rzp.open();
+  } catch (err) {
+    console.error("Book & Pay error:", err);
+    alert(err?.response?.data?.detail || err?.message || "Booking/payment failed.");
   } finally {
     setIsBookingLoading(false);
   }
-  };
+};
+
 
   const checkRoomAvailability = async () => {
     if (!checkIn || !checkOut) return alert("Select both check-in & check-out dates.");
@@ -210,7 +315,11 @@ function Chatbot() {
             <button onClick={handleRequestSubmit} disabled={isRequestLoading}>{isRequestLoading ? "Sending…" : "Send Request"}</button>
             <button onClick={() => startListening(setRequestText)}><FaMicrophone /> Record</button>
           </div>
-          <button onClick={() => setSection(null)}><FaArrowLeft /> Back</button>
+          <button type="button" className="chatbot__back" onClick={goHome}>
+            ← Back
+          </button>
+
+
           {requestSuccess && <p className="chatbot__success">✅ Request sent!</p>}
         </div>
       )}
@@ -229,7 +338,9 @@ function Chatbot() {
           </div>
           <div className="chatbot__btn-row">
             <button onClick={checkRoomAvailability} disabled={isCheckingLoading}>{isCheckingLoading ? "Checking…" : "Check Availability"}</button>
-            <button onClick={handleBookingSubmit} disabled={isBookingLoading}>{isBookingLoading ? "Booking…" : "Book Now"}</button>
+           <button onClick={handleBookingSubmit} disabled={isBookingLoading} className="btn btn--primary">
+            {isBookingLoading ? "Processing…" : "Book & Pay"}
+          </button>
           </div>
           {availability && (
             <ul className="chatbot__availability">
@@ -238,8 +349,25 @@ function Chatbot() {
               <li>Standard: {availability.Standard}</li>
             </ul>
           )}
-          <button onClick={() => setSection(null)}><FaArrowLeft /> Back</button>
+          <button type="button" className="chatbot__back" onClick={goHome}>
+            ← Back
+          </button>
+
+
           {bookingSuccess && <p className="chatbot__success">{bookingSuccess}</p>}
+
+         {paySummary && (
+            <div className="chatbot__payment-summary">
+              <span className={`chip ${paySummary.status === "paid" ? "chip--paid" : "chip--pending"}`}>
+                {paySummary.status === "paid" ? "Paid" : "Payment Pending"}
+              </span>
+              <div className="chatbot__price">
+                Amount: ₹{(paySummary.amount / 100).toFixed(2)} {paySummary.currency}
+              </div>
+              <div className="chatbot__order">Order: {paySummary.orderId}</div>
+            </div>
+          )}
+
         </div>
       )}
 
