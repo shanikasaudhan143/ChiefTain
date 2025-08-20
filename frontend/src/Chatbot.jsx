@@ -36,8 +36,8 @@ function Chatbot() {
   const [isCheckingLoading, setIsCheckingLoading] = useState(false);
   const [paySummary, setPaySummary] = useState(null);
   const [loading, setLoading] = useState(true);
-  const API_BASE = "http://localhost:8000"; 
-  // const API_BASE = "https://chieftrain.onrender.com"
+  // const API_BASE = "http://localhost:8000"; 
+  const API_BASE = "https://chieftrain.onrender.com"
   const faqList = [
   { question: "What time is check-in?", answer: "Check-in is at 2 PM." },
   { question: "What time is check-out?", answer: "Check-out is at 11 AM." },
@@ -329,9 +329,9 @@ const handleBookingSubmit = async () => {
           <div className="chatbot__booking-fields">
           <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
           <select value={roomType} onChange={(e) => setRoomType(e.target.value)}>
-            <option value="Deluxe">Deluxe</option>
-            <option value="Suite">Suite</option>
-            <option value="Standard">Standard</option>
+            <option value="Deluxe">Deluxe (2500) </option>
+            <option value="Suite">Suite (4000)</option>
+            <option value="Standard">Standard (1500) </option>
           </select>
           <input type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} />
           <input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} />
@@ -344,9 +344,9 @@ const handleBookingSubmit = async () => {
           </div>
           {availability && (
             <ul className="chatbot__availability">
-              <li>Deluxe: {availability.Deluxe}</li>
-              <li>Suite: {availability.Suite}</li>
-              <li>Standard: {availability.Standard}</li>
+              <li>Deluxe : {availability.Deluxe}</li>
+              <li>Suite : {availability.Suite}</li>
+              <li>Standard : {availability.Standard}</li>
             </ul>
           )}
           <button type="button" className="chatbot__back" onClick={goHome}>
